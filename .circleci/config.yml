@@ -25,7 +25,7 @@ jobs:
       - checkout
       - add_ssh_keys:
           fingerprints:
-            - "SHA256:Z5L4sZRQ/AzqNWlWtaIMj6Z7jkoZaUcSTsrbM4r+J2o"
+            - "SHA256:J96KpYFFBKjpYWMUi3j8zBejfJl8fmd3yfWs4FkYxsE"
       - run:
           name: Install Node.js and PM2
           command: |
