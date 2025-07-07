@@ -1,21 +1,84 @@
 version: 2.1
 
-workflows:
-  build_and_test:
-    jobs:
-      - build
-    triggers:
-      - schedule:
-          cron: "0 0 * * *"
-          filters:
-            branches:
-              only:
-                - main
-
 jobs:
-  build:
-    docker:
-      - image: cimg/node:16.13
+  build-and-test:
+    machine:
+      image: ubuntu-2004:current
     steps:
       - checkout
-      - run: echo "Running Build"
+      - run:
+          name: Install Node.js
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+      - run:
+          name: Install dependencies
+          command: npm install
+      # - run:
+      #     name: Run tests
+      #     command: npm test
+
+  deploy:
+    machine:
+      image: ubuntu-2004:current
+    steps:
+      - checkout
+      - add_ssh_keys:
+          fingerprints:
+            - "SHA256:Z5L4sZRQ/AzqNWlWtaIMj6Z7jkoZaUcSTsrbM4r+J2o"
+      - run:
+          name: Install Node.js and PM2
+          command: |
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+            sudo npm install -g pm2
+      - run:
+          name: Install dependencies
+          command: npm install
+      - run:
+          name: Build application
+          command: npm run build
+      - run:
+          name: Deploy to EC2 using ecosystem.config.js
+          command: |
+            rsync -avz --delete --exclude="node_modules" --exclude=".git" ./ ubuntu@ec2-13-53-193-61.eu-north-1.compute.amazonaws.com:/home/ubuntu/server/
+
+            ssh -t ubuntu@ec2-13-53-193-61.eu-north-1.compute.amazonaws.com \<< 'REMOTE_CMD'
+              cd /home/ubuntu/server
+              
+              # Install Node.js and PM2 if missing
+              if ! command -v node &>/dev/null; then
+                curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+                sudo npm install -g pm2
+              fi
+              
+              npm install --production
+              
+              # Use ecosystem.config.js for PM2
+              echo "Starting application with PM2 ecosystem file..."
+              pm2 delete all || true
+              pm2 start ecosystem.config.js --env production
+              pm2 save
+              
+              # Show deployment results
+              echo -e "\n=== PM2 Application Status ==="
+              pm2 status
+              
+              echo -e "\n=== Application Logs (last 100 lines) ==="
+              pm2 logs --lines 100 --nostream
+              
+              # Only needed once during initial setup
+              # sudo env PATH=$PATH:/usr/bin pm2 startup systemd -u ubuntu --hp /home/ubuntu
+            REMOTE_CMD
+
+workflows:
+  build-test-deploy:
+    jobs:
+      - build-and-test
+      - deploy:
+          requires:
+            - build-and-test
+          filters:
+            branches:
+              only: master
