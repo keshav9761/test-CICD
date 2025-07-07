@@ -9,7 +9,7 @@ app.use(cors())
 
 // http://localhost:4000/api/test-pipeline
 app.get('/api/test-pipeline', (req, res) => {
-    res.send("hello world test pipeline")
+    res.send("hello world test pipeline k")
 })
 
 app.listen(4000, (req, res) => {
